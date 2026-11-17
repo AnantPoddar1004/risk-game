@@ -1,2 +1,2 @@
-rootProject.name = "sqe-course-project"
+rootProject.name = "risk-game"
 

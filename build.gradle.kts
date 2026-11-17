@@ -11,7 +11,7 @@ plugins {
     id("com.github.spotbugs") version "6.0.25"
 }
 
-group = "nu.csse.sqe"
+group = "com.risk"
 version = "1.0"
 
 repositories {
