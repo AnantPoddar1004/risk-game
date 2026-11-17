@@ -1,0 +1,402 @@
+package code.model;
+
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+
+import org.junit.jupiter.api.Test;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+
+/**
+ * Tests boundary values and core behavior for the Deck class.
+ */
+public final class DeckTest {
+
+    private static final int TOTAL_CARD_COUNT = 44;
+
+    private static final int TERRITORY_CARD_COUNT = 42;
+
+    private static final int WILD_CARD_COUNT = 2;
+
+    private static final int THREE_CARDS = 3;
+
+    private static final int FOUR_CARDS = 4;
+
+    private static final int FIVE_CARDS = 5;
+
+    private static final int SHUFFLE_RETRY_COUNT = 12;
+
+    @Test
+    public void freshDeckContainsFortyFourCards() {
+        Deck deck = new Deck();
+
+        assertEquals(TOTAL_CARD_COUNT, deck.size());
+    }
+
+    @Test
+    public void freshDeckContainsFortyTwoTerritoryCards() {
+        Deck deck = new Deck();
+
+        long territoryCardCount = deck.getCards()
+                .stream()
+                .filter(card -> !card.isWild())
+                .count();
+
+        assertEquals(TERRITORY_CARD_COUNT, territoryCardCount);
+    }
+
+    @Test
+    public void freshDeckContainsTwoWildCards() {
+        Deck deck = new Deck();
+
+        long wildCardCount = deck.getCards()
+                .stream()
+                .filter(RiskCard::isWild)
+                .count();
+
+        assertEquals(WILD_CARD_COUNT, wildCardCount);
+    }
+
+    @Test
+    public void everyTerritoryCardHasTerritory() {
+        Deck deck = new Deck();
+
+        deck.getCards()
+                .stream()
+                .filter(card -> !card.isWild())
+                .forEach(card -> assertNotNull(card.getTerritory()));
+    }
+
+    @Test
+    public void everyTerritoryAppearsOnExactlyOneCard() {
+        Deck deck = new Deck();
+        Set<Territory> territories = new HashSet<>();
+
+        deck.getCards()
+                .stream()
+                .filter(card -> !card.isWild())
+                .forEach(card -> territories.add(card.getTerritory()));
+
+        assertEquals(TERRITORY_CARD_COUNT, territories.size());
+    }
+
+    @Test
+    public void deckContainsEachNonWildCardType() {
+        Deck deck = new Deck();
+
+        boolean hasInfantry = deck.getCards()
+                .stream()
+                .filter(card -> !card.isWild())
+                .anyMatch(card -> card.getType() == CardType.INFANTRY);
+        boolean hasCavalry = deck.getCards()
+                .stream()
+                .filter(card -> !card.isWild())
+                .anyMatch(card -> card.getType() == CardType.CAVALRY);
+        boolean hasArtillery = deck.getCards()
+                .stream()
+                .filter(card -> !card.isWild())
+                .anyMatch(card -> card.getType() == CardType.ARTILLERY);
+
+        assertTrue(hasInfantry);
+        assertTrue(hasCavalry);
+        assertTrue(hasArtillery);
+    }
+
+    @Test
+    public void freshDeckStartsWithEmptyDiscardPile() {
+        Deck deck = new Deck();
+
+        assertEquals(0, deck.getDiscardPileSize());
+    }
+
+    @Test
+    public void freshDeckIsNotEmpty() {
+        Deck deck = new Deck();
+
+        assertFalse(deck.isEmpty());
+    }
+
+    @Test
+    public void drawCardFromFullDeckReturnsCardAndDecreasesDrawPileSize() {
+        Deck deck = new Deck();
+
+        RiskCard drawnCard = deck.drawCard();
+
+        assertNotNull(drawnCard);
+        assertEquals(TOTAL_CARD_COUNT - 1, deck.size());
+        assertEquals(0, deck.getDiscardPileSize());
+    }
+
+    @Test
+    public void drawCardFromNonEmptyDeckLeavesDiscardPileUntouched() {
+        Deck deck = new Deck();
+        RiskCard discardedCard = deck.drawCard();
+
+        deck.discardCards(List.of(discardedCard));
+        int drawPileSizeBeforeDraw = deck.size();
+
+        RiskCard drawnCard = deck.drawCard();
+
+        assertNotNull(drawnCard);
+        assertEquals(drawPileSizeBeforeDraw - 1, deck.size());
+        assertEquals(1, deck.getDiscardPileSize());
+    }
+
+    @Test
+    public void drawLastCardFromDeckReturnsCardAndLeavesDrawPileEmpty() {
+        Deck deck = new Deck();
+
+        for (int cardIndex = 0; cardIndex < TOTAL_CARD_COUNT - 1; cardIndex++) {
+            deck.drawCard();
+        }
+
+        RiskCard drawnCard = deck.drawCard();
+
+        assertNotNull(drawnCard);
+        assertEquals(0, deck.size());
+        assertTrue(deck.isEmpty());
+    }
+
+    @Test
+    public void drawCardFromEmptyDeckWithOneDiscardedCardReinitializesAndDrawsCard() {
+        Deck deck = new Deck();
+        RiskCard discardedCard = deck.drawCard();
+
+        deck.discardCards(List.of(discardedCard));
+        for (int cardIndex = 0; cardIndex < TOTAL_CARD_COUNT - 1; cardIndex++) {
+            deck.drawCard();
+        }
+
+        RiskCard drawnCard = deck.drawCard();
+
+        assertNotNull(drawnCard);
+        assertEquals(0, deck.size());
+        assertEquals(0, deck.getDiscardPileSize());
+    }
+
+    @Test
+    public void drawCardFromEmptyDeckWithMultipleDiscardedCardsReinitializesAndDrawsCard() {
+        Deck deck = new Deck();
+        List<RiskCard> discardedCards = List.of(
+                deck.drawCard(),
+                deck.drawCard(),
+                deck.drawCard());
+
+        deck.discardCards(discardedCards);
+        for (int cardIndex = 0; cardIndex < TOTAL_CARD_COUNT - THREE_CARDS; cardIndex++) {
+            deck.drawCard();
+        }
+
+        RiskCard drawnCard = deck.drawCard();
+
+        assertNotNull(drawnCard);
+        assertEquals(THREE_CARDS - 1, deck.size());
+        assertEquals(0, deck.getDiscardPileSize());
+    }
+
+    @Test
+    public void drawCardFromEmptyDeckWithEmptyDiscardPileRaisesException() {
+        Deck deck = new Deck();
+
+        for (int cardIndex = 0; cardIndex < TOTAL_CARD_COUNT; cardIndex++) {
+            deck.drawCard();
+        }
+
+        IllegalStateException exception = assertThrows(
+                IllegalStateException.class,
+                deck::drawCard);
+
+        assertEquals(
+                "Cannot draw a card because both the draw pile and discard pile are empty.",
+                exception.getMessage());
+    }
+
+    @Test
+    public void discardOneCardIntoEmptyDiscardPileIncreasesDiscardPileSize() {
+        Deck deck = new Deck();
+        RiskCard card = deck.drawCard();
+        int drawPileSize = deck.size();
+
+        deck.discardCards(List.of(card));
+
+        assertEquals(1, deck.getDiscardPileSize());
+        assertEquals(drawPileSize, deck.size());
+    }
+
+    @Test
+    public void discardMultipleCardsIntoEmptyDiscardPileIncreasesDiscardPileSize() {
+        Deck deck = new Deck();
+        List<RiskCard> cardsToDiscard = List.of(
+                deck.drawCard(),
+                deck.drawCard(),
+                deck.drawCard());
+        int drawPileSize = deck.size();
+
+        deck.discardCards(cardsToDiscard);
+
+        assertEquals(THREE_CARDS, deck.getDiscardPileSize());
+        assertEquals(drawPileSize, deck.size());
+    }
+
+    @Test
+    public void discardNoCardsLeavesDiscardPileUnchanged() {
+        Deck deck = new Deck();
+        int drawPileSize = deck.size();
+
+        deck.discardCards(List.of());
+
+        assertEquals(0, deck.getDiscardPileSize());
+        assertEquals(drawPileSize, deck.size());
+    }
+
+    @Test
+    public void discardCardsAfterDiscardPileHasCardsAccumulatesDiscardPileSize() {
+        Deck deck = new Deck();
+        RiskCard firstDiscardedCard = deck.drawCard();
+        List<RiskCard> nextDiscardedCards = List.of(
+                deck.drawCard(),
+                deck.drawCard(),
+                deck.drawCard());
+        int drawPileSize = deck.size();
+
+        deck.discardCards(List.of(firstDiscardedCard));
+        deck.discardCards(nextDiscardedCards);
+
+        assertEquals(FOUR_CARDS, deck.getDiscardPileSize());
+        assertEquals(drawPileSize, deck.size());
+    }
+
+    @Test
+    public void reinitializeDrawPileFromOneDiscardedCardMovesDiscardToDrawPile() {
+        Deck deck = new Deck();
+        RiskCard discardedCard = deck.drawCard();
+
+        deck.discardCards(List.of(discardedCard));
+        for (int cardIndex = 0; cardIndex < TOTAL_CARD_COUNT - 1; cardIndex++) {
+            deck.drawCard();
+        }
+        deck.reinitializeDrawPileFromDiscardPile();
+
+        assertEquals(1, deck.size());
+        assertEquals(0, deck.getDiscardPileSize());
+    }
+
+    @Test
+    public void reinitializeDrawPileFromMultipleDiscardedCardsMovesDiscardToDrawPile() {
+        Deck deck = new Deck();
+        List<RiskCard> discardedCards = List.of(
+                deck.drawCard(),
+                deck.drawCard(),
+                deck.drawCard());
+
+        deck.discardCards(discardedCards);
+        for (int cardIndex = 0; cardIndex < TOTAL_CARD_COUNT - THREE_CARDS; cardIndex++) {
+            deck.drawCard();
+        }
+        deck.reinitializeDrawPileFromDiscardPile();
+
+        assertEquals(THREE_CARDS, deck.size());
+        assertEquals(0, deck.getDiscardPileSize());
+    }
+
+    @Test
+    public void reinitializeDrawPileFromDiscardPileEventuallyChangesDiscardOrder() {
+        boolean observedDifferentOrder = false;
+
+        for (int attempt = 0; attempt < SHUFFLE_RETRY_COUNT; attempt++) {
+            Deck deck = new Deck();
+            List<RiskCard> discardedCards = List.of(
+                    deck.drawCard(),
+                    deck.drawCard(),
+                    deck.drawCard(),
+                    deck.drawCard(),
+                    deck.drawCard());
+
+            deck.discardCards(discardedCards);
+            for (int cardIndex = 0; cardIndex < TOTAL_CARD_COUNT - FIVE_CARDS; cardIndex++) {
+                deck.drawCard();
+            }
+
+            deck.reinitializeDrawPileFromDiscardPile();
+            if (!discardedCards.equals(deck.getCards())) {
+                observedDifferentOrder = true;
+                break;
+            }
+        }
+
+        assertTrue(observedDifferentOrder);
+    }
+
+    @Test
+    public void reinitializeDrawPileFromEmptyDiscardPileLeavesDrawPileEmpty() {
+        Deck deck = new Deck();
+
+        for (int cardIndex = 0; cardIndex < TOTAL_CARD_COUNT; cardIndex++) {
+            deck.drawCard();
+        }
+        deck.reinitializeDrawPileFromDiscardPile();
+
+        assertEquals(0, deck.size());
+        assertEquals(0, deck.getDiscardPileSize());
+    }
+
+    @Test
+    public void shuffleKeepsDeckSizeSame() {
+        Deck deck = new Deck();
+
+        deck.shuffle();
+
+        assertEquals(TOTAL_CARD_COUNT, deck.size());
+    }
+
+    @Test
+    public void shuffleChangesDeckOrder() {
+        Deck deck = new Deck();
+        List<RiskCard> originalCards = new ArrayList<>(deck.getCards());
+
+        deck.shuffle();
+
+        assertNotEquals(originalCards, deck.getCards());
+    }
+
+    @Test
+    public void firstTerritoryCardIsNamedTerritoryOne() {
+        Deck deck = new Deck();
+
+        RiskCard firstCard = deck.getCards().stream()
+                .filter(card -> !card.isWild())
+                .findFirst()
+                .get();
+
+        assertEquals("Territory 1", firstCard.getTerritory().getName());
+    }
+
+    @Test
+    public void secondTerritoryCardHasCavalryType() {
+        Deck deck = new Deck();
+
+        List<RiskCard> territoryCards = deck.getCards().stream()
+                .filter(card -> !card.isWild())
+                .collect(java.util.stream.Collectors.toList());
+
+        assertEquals(CardType.CAVALRY, territoryCards.get(1).getType());
+    }
+
+    @Test
+    public void thirdTerritoryCardHasArtilleryType() {
+        Deck deck = new Deck();
+
+        List<RiskCard> territoryCards = deck.getCards().stream()
+                .filter(card -> !card.isWild())
+                .collect(java.util.stream.Collectors.toList());
+
+        assertEquals(CardType.ARTILLERY, territoryCards.get(2).getType());
+    }
+}
